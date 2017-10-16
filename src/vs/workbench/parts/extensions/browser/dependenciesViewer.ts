@@ -92,10 +92,10 @@ export class Renderer implements IRenderer {
 			e.stopPropagation();
 			e.preventDefault();
 		})];
-		var identifier = dom.append(header, dom.$('span.identifier'));
+		const identifier = dom.append(header, dom.$('span.identifier'));
 
 		const footer = dom.append(details, dom.$('.footer'));
-		var author = dom.append(footer, dom.$('.author'));
+		const author = dom.append(footer, dom.$('.author'));
 		return {
 			icon,
 			name,
@@ -140,7 +140,7 @@ export class Renderer implements IRenderer {
 		}
 
 		data.name.textContent = extension.displayName;
-		data.identifier.textContent = extension.identifier;
+		data.identifier.textContent = extension.id;
 		data.author.textContent = extension.publisherDisplayName;
 		data.extensionDependencies = element;
 	}

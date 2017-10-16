@@ -13,10 +13,9 @@ import { IExtensionsWorkbenchService } from 'vs/workbench/parts/extensions/commo
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { IMessageService } from 'vs/platform/message/common/message';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
-import { remote } from 'electron';
-import { IWindowsService } from 'vs/platform/windows/common/windows';
-
-const dialog = remote.dialog;
+import { IWindowsService, IWindowService } from 'vs/platform/windows/common/windows';
+import { IFileService } from 'vs/platform/files/common/files';
+import URI from 'vs/base/common/uri';
 
 export class OpenExtensionsFolderAction extends Action {
 
@@ -27,6 +26,7 @@ export class OpenExtensionsFolderAction extends Action {
 		id: string,
 		label: string,
 		@IWindowsService private windowsService: IWindowsService,
+		@IFileService private fileService: IFileService,
 		@IEnvironmentService private environmentService: IEnvironmentService
 	) {
 		super(id, label, null, true);
@@ -34,7 +34,17 @@ export class OpenExtensionsFolderAction extends Action {
 
 	run(): TPromise<void> {
 		const extensionsHome = this.environmentService.extensionsPath;
-		return this.windowsService.showItemInFolder(paths.normalize(extensionsHome, true));
+
+		return this.fileService.resolveFile(URI.file(extensionsHome)).then(file => {
+			let itemToShow: string;
+			if (file.hasChildren) {
+				itemToShow = file.children[0].resource.fsPath;
+			} else {
+				itemToShow = paths.normalize(extensionsHome, true);
+			}
+
+			return this.windowsService.showItemInFolder(itemToShow);
+		});
 	}
 
 	protected isEnabled(): boolean {
@@ -52,13 +62,14 @@ export class InstallVSIXAction extends Action {
 		label = InstallVSIXAction.LABEL,
 		@IExtensionsWorkbenchService private extensionsWorkbenchService: IExtensionsWorkbenchService,
 		@IMessageService private messageService: IMessageService,
-		@IInstantiationService private instantiationService: IInstantiationService
+		@IInstantiationService private instantiationService: IInstantiationService,
+		@IWindowService private windowsService: IWindowService
 	) {
 		super(id, label, 'extension-action install-vsix', true);
 	}
 
 	run(): TPromise<any> {
-		const result = dialog.showOpenDialog(remote.getCurrentWindow(), {
+		const result = this.windowsService.showOpenDialog({
 			filters: [{ name: 'VSIX Extensions', extensions: ['vsix'] }],
 			properties: ['openFile']
 		});

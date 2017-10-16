@@ -6,14 +6,32 @@
 import Messages from 'vs/workbench/parts/markers/common/messages';
 import Constants from 'vs/workbench/parts/markers/common/constants';
 import { KeyMod, KeyCode } from 'vs/base/common/keyCodes';
-import { Registry } from 'vs/platform/platform';
+import { Registry } from 'vs/platform/registry/common/platform';
 import { SyncActionDescriptor } from 'vs/platform/actions/common/actions';
-import { IWorkbenchActionRegistry, Extensions as ActionExtensions } from 'vs/workbench/common/actionRegistry';
+import { KeybindingsRegistry } from 'vs/platform/keybinding/common/keybindingsRegistry';
+import { IWorkbenchActionRegistry, Extensions as ActionExtensions } from 'vs/workbench/common/actions';
 import { PanelRegistry, Extensions as PanelExtensions, PanelDescriptor } from 'vs/workbench/browser/panel';
 import { Extensions, IConfigurationRegistry } from 'vs/platform/configuration/common/configurationRegistry';
 import { ToggleMarkersPanelAction, ToggleErrorsAndWarningsAction } from 'vs/workbench/parts/markers/browser/markersPanelActions';
+import { ContextKeyExpr } from 'vs/platform/contextkey/common/contextkey';
+import { IPanelService } from 'vs/workbench/services/panel/common/panelService';
+import { MarkersPanel } from 'vs/workbench/parts/markers/browser/markersPanel';
 
 export function registerContributions(): void {
+
+	KeybindingsRegistry.registerCommandAndKeybindingRule({
+		id: Constants.MARKER_OPEN_SIDE_ACTION_ID,
+		weight: KeybindingsRegistry.WEIGHT.workbenchContrib(),
+		when: ContextKeyExpr.and(Constants.MarkerFocusContextKey),
+		primary: KeyMod.CtrlCmd | KeyCode.Enter,
+		mac: {
+			primary: KeyMod.WinCtrl | KeyCode.Enter
+		},
+		handler: (accessor, args: any) => {
+			const markersPanel = (<MarkersPanel>accessor.get(IPanelService).getActivePanel());
+			markersPanel.openFileAtElement(markersPanel.getFocusElement(), false, true, true);
+		}
+	});
 
 	// configuration
 	Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -30,10 +48,10 @@ export function registerContributions(): void {
 		}
 	});
 
+
 	// markers panel
 	Registry.as<PanelRegistry>(PanelExtensions.Panels).registerPanel(new PanelDescriptor(
-		'vs/workbench/parts/markers/browser/markersPanel',
-		'MarkersPanel',
+		MarkersPanel,
 		Constants.MARKERS_PANEL_ID,
 		Messages.MARKERS_PANEL_TITLE_PROBLEMS,
 		'markersPanel',

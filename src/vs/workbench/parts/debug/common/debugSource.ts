@@ -3,18 +3,36 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as nls from 'vs/nls';
+import { TPromise } from 'vs/base/common/winjs.base';
 import uri from 'vs/base/common/uri';
+import * as paths from 'vs/base/common/paths';
 import { DEBUG_SCHEME } from 'vs/workbench/parts/debug/common/debug';
+import { IRange } from 'vs/editor/common/core/range';
+import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
+
+const UNKNOWN_SOURCE_LABEL = nls.localize('unknownSource', "Unknown Source");
 
 export class Source {
 
-	public uri: uri;
+	public readonly uri: uri;
+	public available: boolean;
 
-	private static INTERNAL_URI_PREFIX = `${DEBUG_SCHEME}://internal/`;
-
-	constructor(public raw: DebugProtocol.Source, public deemphasize: boolean) {
-		const path = raw.path || raw.name;
-		this.uri = raw.sourceReference > 0 ? uri.parse(Source.INTERNAL_URI_PREFIX + raw.sourceReference + '/' + path) : uri.file(path);
+	constructor(public readonly raw: DebugProtocol.Source, sessionId: string) {
+		if (!raw) {
+			this.raw = { name: UNKNOWN_SOURCE_LABEL };
+		}
+		this.available = this.raw.name !== UNKNOWN_SOURCE_LABEL;
+		const path = this.raw.path || this.raw.name;
+		if (this.raw.sourceReference > 0) {
+			this.uri = uri.parse(`${DEBUG_SCHEME}:${encodeURIComponent(path)}?session=${encodeURIComponent(sessionId)}&ref=${this.raw.sourceReference}`);
+		} else {
+			if (paths.isAbsolute(path)) {
+				this.uri = uri.file(path); // path should better be absolute!
+			} else {
+				this.uri = uri.parse(path);
+			}
+		}
 	}
 
 	public get name() {
@@ -25,24 +43,29 @@ export class Source {
 		return this.raw.origin;
 	}
 
+	public get presentationHint() {
+		return this.raw.presentationHint;
+	}
+
 	public get reference() {
 		return this.raw.sourceReference;
 	}
 
 	public get inMemory() {
-		return Source.isInMemory(this.uri);
+		return this.uri.scheme === DEBUG_SCHEME;
 	}
 
-	public static isInMemory(uri: uri): boolean {
-		return uri.toString().indexOf(Source.INTERNAL_URI_PREFIX) === 0;
-	}
-
-	public static getSourceReference(uri: uri): number {
-		if (!Source.isInMemory(uri)) {
-			return 0;
-		}
-
-		const uriStr = uri.toString();
-		return parseInt(uriStr.substring(Source.INTERNAL_URI_PREFIX.length, uriStr.lastIndexOf('/')));
+	public openInEditor(editorService: IWorkbenchEditorService, selection: IRange, preserveFocus?: boolean, sideBySide?: boolean): TPromise<any> {
+		return !this.available ? TPromise.as(null) : editorService.openEditor({
+			resource: this.uri,
+			description: this.origin,
+			options: {
+				preserveFocus,
+				selection,
+				revealIfVisible: true,
+				revealInCenterIfOutsideViewport: true,
+				pinned: !preserveFocus && !this.inMemory
+			}
+		}, sideBySide);
 	}
 }

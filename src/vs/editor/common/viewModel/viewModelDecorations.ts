@@ -9,6 +9,7 @@ import { Range } from 'vs/editor/common/core/range';
 import { Position } from 'vs/editor/common/core/position';
 import * as editorCommon from 'vs/editor/common/editorCommon';
 import { InlineDecoration, ViewModelDecoration, ICoordinatesConverter } from 'vs/editor/common/viewModel/viewModel';
+import { IModelDecorationsChangedEvent } from 'vs/editor/common/model/textModelEvents';
 
 export interface IDecorationsViewportData {
 	/**
@@ -39,7 +40,6 @@ export class ViewModelDecorations implements IDisposable {
 		this.configuration = configuration;
 		this._coordinatesConverter = coordinatesConverter;
 		this._decorationsCache = Object.create(null);
-
 		this._clearCachedModelDecorationsResolver();
 	}
 
@@ -58,7 +58,7 @@ export class ViewModelDecorations implements IDisposable {
 		this._clearCachedModelDecorationsResolver();
 	}
 
-	public onModelDecorationsChanged(e: editorCommon.IModelDecorationsChangedEvent, emit: (eventType: string, payload: any) => void): void {
+	public onModelDecorationsChanged(e: IModelDecorationsChangedEvent): void {
 		let changedDecorations = e.changedDecorations;
 		for (let i = 0, len = changedDecorations.length; i < len; i++) {
 			let changedDecoration = changedDecorations[i];
@@ -71,20 +71,20 @@ export class ViewModelDecorations implements IDisposable {
 		}
 
 		let removedDecorations = e.removedDecorations;
-		for (let i = 0, len = removedDecorations.length; i < len; i++) {
-			let removedDecoration = removedDecorations[i];
-			delete this._decorationsCache[removedDecoration];
+		if (this._decorationsCache !== null && this._decorationsCache !== undefined) {
+			for (let i = 0, len = removedDecorations.length; i < len; i++) {
+				let removedDecoration = removedDecorations[i];
+				delete this._decorationsCache[removedDecoration];
+			}
 		}
 
 		this._clearCachedModelDecorationsResolver();
-		emit(editorCommon.ViewEventNames.DecorationsChangedEvent, {});
 	}
 
-	public onLineMappingChanged(emit: (eventType: string, payload: any) => void): void {
+	public onLineMappingChanged(): void {
 		this._decorationsCache = Object.create(null);
 
 		this._clearCachedModelDecorationsResolver();
-		emit(editorCommon.ViewEventNames.DecorationsChangedEvent, {});
 	}
 
 	private _getOrCreateViewModelDecoration(modelDecoration: editorCommon.IModelDecoration): ViewModelDecoration {

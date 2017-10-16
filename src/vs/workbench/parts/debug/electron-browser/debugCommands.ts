@@ -3,44 +3,24 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as nls from 'vs/nls';
 import { KeyCode, KeyMod } from 'vs/base/common/keyCodes';
+import { TPromise } from 'vs/base/common/winjs.base';
+import severity from 'vs/base/common/severity';
 import { List } from 'vs/base/browser/ui/list/listWidget';
 import * as errors from 'vs/base/common/errors';
+import { ICommonCodeEditor } from 'vs/editor/common/editorCommon';
 import { ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
 import { KeybindingsRegistry } from 'vs/platform/keybinding/common/keybindingsRegistry';
 import { IListService } from 'vs/platform/list/browser/listService';
-import { IDebugService, IEnablement, CONTEXT_NOT_IN_DEBUG_MODE, CONTEXT_IN_DEBUG_MODE, CONTEXT_BREAKPOINTS_FOCUSED, CONTEXT_WATCH_EXPRESSIONS_FOCUSED, CONTEXT_VARIABLES_FOCUSED } from 'vs/workbench/parts/debug/common/debug';
+import { IMessageService } from 'vs/platform/message/common/message';
+import { IWorkspaceContextService, WorkbenchState } from 'vs/platform/workspace/common/workspace';
+import { IDebugService, IEnablement, CONTEXT_BREAKPOINTS_FOCUSED, CONTEXT_WATCH_EXPRESSIONS_FOCUSED, CONTEXT_VARIABLES_FOCUSED, EDITOR_CONTRIBUTION_ID, IDebugEditorContribution } from 'vs/workbench/parts/debug/common/debug';
 import { Expression, Variable, Breakpoint, FunctionBreakpoint } from 'vs/workbench/parts/debug/common/debugModel';
+import { IExtensionsViewlet, VIEWLET_ID as EXTENSIONS_VIEWLET_ID } from 'vs/workbench/parts/extensions/common/extensions';
+import { IViewletService } from 'vs/workbench/services/viewlet/browser/viewlet';
 
 export function registerCommands(): void {
-
-	KeybindingsRegistry.registerCommandAndKeybindingRule({
-		id: '_workbench.startDebug',
-		weight: KeybindingsRegistry.WEIGHT.workbenchContrib(),
-		handler(accessor: ServicesAccessor, configurationOrName: any) {
-			const debugService = accessor.get(IDebugService);
-			if (!configurationOrName) {
-				configurationOrName = debugService.getViewModel().selectedConfigurationName;
-			}
-
-			debugService.createProcess(configurationOrName).done(undefined, errors.onUnexpectedError);
-		},
-		when: CONTEXT_NOT_IN_DEBUG_MODE,
-		primary: undefined
-	});
-
-	KeybindingsRegistry.registerCommandAndKeybindingRule({
-		id: 'workbench.customDebugRequest',
-		weight: KeybindingsRegistry.WEIGHT.workbenchContrib(),
-		handler(accessor: ServicesAccessor, request: string, requestArgs: any) {
-			const process = accessor.get(IDebugService).getViewModel().focusedProcess;
-			if (process) {
-				process.session.custom(request, requestArgs).done(undefined, errors.onUnexpectedError);
-			}
-		},
-		when: CONTEXT_IN_DEBUG_MODE,
-		primary: undefined
-	});
 
 	KeybindingsRegistry.registerCommandAndKeybindingRule({
 		id: 'debug.logToDebugConsole',
@@ -48,7 +28,8 @@ export function registerCommands(): void {
 		handler(accessor: ServicesAccessor, value: string) {
 			if (typeof value === 'string') {
 				const debugService = accessor.get(IDebugService);
-				debugService.logToRepl(value);
+				// Use warning as severity to get the orange color for messages coming from the debug extension
+				debugService.logToRepl(value, severity.Warning);
 			}
 		},
 		when: undefined,
@@ -89,9 +70,7 @@ export function registerCommands(): void {
 			if (!(focused instanceof List)) {
 				const element = focused.getFocus();
 				if (element instanceof Expression) {
-					if (!element.hasChildren) {
-						debugService.getViewModel().setSelectedExpression(element);
-					}
+					debugService.getViewModel().setSelectedExpression(element);
 				}
 			}
 		}
@@ -159,6 +138,48 @@ export function registerCommands(): void {
 					debugService.removeFunctionBreakpoints(element.getId()).done(null, errors.onUnexpectedError);
 				}
 			}
+		}
+	});
+
+	KeybindingsRegistry.registerCommandAndKeybindingRule({
+		id: 'debug.installAdditionalDebuggers',
+		weight: KeybindingsRegistry.WEIGHT.workbenchContrib(),
+		when: undefined,
+		primary: undefined,
+		handler: (accessor) => {
+			const viewletService = accessor.get(IViewletService);
+			return viewletService.openViewlet(EXTENSIONS_VIEWLET_ID, true)
+				.then(viewlet => viewlet as IExtensionsViewlet)
+				.then(viewlet => {
+					viewlet.search('tag:debuggers @sort:installs');
+					viewlet.focus();
+				});
+		}
+	});
+
+	KeybindingsRegistry.registerCommandAndKeybindingRule({
+		id: 'debug.addConfiguration',
+		weight: KeybindingsRegistry.WEIGHT.workbenchContrib(),
+		when: undefined,
+		primary: undefined,
+		handler: (accessor, workspaceUri: string) => {
+			const manager = accessor.get(IDebugService).getConfigurationManager();
+			if (accessor.get(IWorkspaceContextService).getWorkbenchState() === WorkbenchState.EMPTY) {
+				accessor.get(IMessageService).show(severity.Info, nls.localize('noFolderDebugConfig', "Please first open a folder in order to do advanced debug configuration."));
+				return TPromise.as(null);
+			}
+			const launch = manager.getLaunches().filter(l => l.workspace.uri.toString() === workspaceUri).pop() || manager.selectedLaunch;
+
+			return launch.openConfigFile(false).done(editor => {
+				if (editor) {
+					const codeEditor = <ICommonCodeEditor>editor.getControl();
+					if (codeEditor) {
+						return codeEditor.getContribution<IDebugEditorContribution>(EDITOR_CONTRIBUTION_ID).addLaunchConfiguration();
+					}
+				}
+
+				return undefined;
+			});
 		}
 	});
 }
