@@ -11,10 +11,10 @@ import * as objects from 'vs/base/common/objects';
 import URI from 'vs/base/common/uri';
 import { Registry } from 'vs/platform/registry/common/platform';
 import { IConfigurationRegistry, Extensions, OVERRIDE_PROPERTY_PATTERN } from 'vs/platform/configuration/common/configurationRegistry';
-import { IOverrides, overrideIdentifierFromKey, addToValueTree, toValuesTree, IConfiguraionModel, merge, getConfigurationValue, IConfigurationOverrides, IConfigurationData, getDefaultValues, getConfigurationKeys, IConfigurationChangeEvent, ConfigurationTarget, removeFromValueTree } from 'vs/platform/configuration/common/configuration';
+import { IOverrides, overrideIdentifierFromKey, addToValueTree, toValuesTree, IConfigurationModel, merge, getConfigurationValue, IConfigurationOverrides, IConfigurationData, getDefaultValues, getConfigurationKeys, IConfigurationChangeEvent, ConfigurationTarget, removeFromValueTree } from 'vs/platform/configuration/common/configuration';
 import { Workspace } from 'vs/platform/workspace/common/workspace';
 
-export class ConfigurationModel implements IConfiguraionModel {
+export class ConfigurationModel implements IConfigurationModel {
 
 	constructor(protected _contents: any = {}, protected _keys: string[] = [], protected _overrides: IOverrides[] = []) {
 	}
@@ -132,6 +132,14 @@ export class ConfigurationModel implements IConfiguraionModel {
 			return true;
 		}
 		return false;
+	}
+
+	toJSON(): IConfigurationModel {
+		return {
+			contents: this.contents,
+			overrides: this.overrides,
+			keys: this.keys
+		};
 	}
 }
 
@@ -310,12 +318,12 @@ export class Configuration {
 
 	getSection<C>(section: string = '', overrides: IConfigurationOverrides = {}): C {
 		const configModel = this.getConsolidateConfigurationModel(overrides);
-		return Object.freeze(section ? configModel.getSectionContents<C>(section) : configModel.contents);
+		return objects.clone(section ? configModel.getSectionContents<C>(section) : configModel.contents);
 	}
 
 	getValue(key: string, overrides: IConfigurationOverrides = {}): any {
 		const consolidateConfigurationModel = this.getConsolidateConfigurationModel(overrides);
-		return Object.freeze(getConfigurationValue<any>(consolidateConfigurationModel.contents, key));
+		return objects.clone(getConfigurationValue<any>(consolidateConfigurationModel.contents, key));
 	}
 
 	updateValue(key: string, value: any, overrides: IConfigurationOverrides = {}): void {
@@ -352,7 +360,7 @@ export class Configuration {
 		const consolidateConfigurationModel = this.getConsolidateConfigurationModel(overrides);
 		const folderConfigurationModel = this.getFolderConfigurationModelForResource(overrides.resource);
 		const memoryConfigurationModel = overrides.resource ? this._memoryConfigurationByResource.get(overrides.resource) || this._memoryConfiguration : this._memoryConfiguration;
-		return Object.freeze({
+		return objects.clone({
 			default: getConfigurationValue<C>(overrides.overrideIdentifier ? this._defaults.override(overrides.overrideIdentifier).contents : this._defaults.contents, key),
 			user: getConfigurationValue<C>(overrides.overrideIdentifier ? this._user.override(overrides.overrideIdentifier).contents : this._user.contents, key),
 			workspace: this._workspace ? getConfigurationValue<C>(overrides.overrideIdentifier ? this._workspaceConfiguration.override(overrides.overrideIdentifier).contents : this._workspaceConfiguration.contents, key) : void 0, //Check on workspace exists or not because _workspaceConfiguration is never null
@@ -369,12 +377,12 @@ export class Configuration {
 		workspaceFolder: string[];
 	} {
 		const folderConfigurationModel = this.getFolderConfigurationModelForResource();
-		return {
+		return objects.clone({
 			default: this._defaults.keys,
 			user: this._user.keys,
 			workspace: this._workspaceConfiguration.keys,
 			workspaceFolder: folderConfigurationModel ? folderConfigurationModel.keys : []
-		};
+		});
 	}
 
 	private getConsolidateConfigurationModel<C>(overrides: IConfigurationOverrides): ConfigurationModel {
@@ -450,7 +458,7 @@ export class Configuration {
 		return new Configuration(defaultConfiguration, userConfiguration, workspaceConfiguration, folders, new ConfigurationModel(), new StrictResourceMap<ConfigurationModel>(), workspace);
 	}
 
-	private static parseConfigurationModel(model: IConfiguraionModel): ConfigurationModel {
+	private static parseConfigurationModel(model: IConfigurationModel): ConfigurationModel {
 		return new ConfigurationModel(model.contents, model.keys, model.overrides);
 	}
 }
@@ -481,41 +489,59 @@ export class AbstractConfigurationChangeEvent {
 
 export class AllKeysConfigurationChangeEvent extends AbstractConfigurationChangeEvent implements IConfigurationChangeEvent {
 
-	private changedConfiguration: ConfigurationModel = null;
+	private _changedConfiguration: ConfigurationModel = null;
 
 	constructor(readonly affectedKeys: string[], readonly source: ConfigurationTarget, readonly sourceConfig: any) { super(); }
 
-	affectsConfiguration(config: string, resource?: URI): boolean {
-		if (!this.changedConfiguration) {
-			this.changedConfiguration = new ConfigurationModel();
-			this.updateKeys(this.changedConfiguration, this.affectedKeys);
+	get changedConfiguration(): ConfigurationModel {
+		if (!this._changedConfiguration) {
+			this._changedConfiguration = new ConfigurationModel();
+			this.updateKeys(this._changedConfiguration, this.affectedKeys);
 		}
-		return this.doesConfigurationContains(this.changedConfiguration, config);
+		return this._changedConfiguration;
 	}
 
+	get changedConfigurationByResource(): StrictResourceMap<IConfigurationModel> {
+		return new StrictResourceMap();
+	}
+
+	affectsConfiguration(config: string, resource?: URI): boolean {
+		return this.doesConfigurationContains(this.changedConfiguration, config);
+	}
 }
 
 export class ConfigurationChangeEvent extends AbstractConfigurationChangeEvent implements IConfigurationChangeEvent {
 
-	private changedConfiguration: ConfigurationModel = new ConfigurationModel();
-	private changedConfigurationByResource: StrictResourceMap<ConfigurationModel> = new StrictResourceMap<ConfigurationModel>();
-	private resources: URI[] = [];
-
 	private _source: ConfigurationTarget;
 	private _sourceConfig: any;
+
+	constructor(
+		private _changedConfiguration: ConfigurationModel = new ConfigurationModel(),
+		private _changedConfigurationByResource: StrictResourceMap<ConfigurationModel> = new StrictResourceMap<ConfigurationModel>()) {
+		super();
+	}
+
+	get changedConfiguration(): IConfigurationModel {
+		return this._changedConfiguration;
+	}
+
+	get changedConfigurationByResource(): StrictResourceMap<IConfigurationModel> {
+		return this._changedConfigurationByResource;
+	}
 
 	change(event: ConfigurationChangeEvent): ConfigurationChangeEvent
 	change(keys: string[], resource?: URI): ConfigurationChangeEvent
 	change(arg1: any, arg2?: any): ConfigurationChangeEvent {
 		if (arg1 instanceof ConfigurationChangeEvent) {
-			this.changedConfiguration = this.changedConfiguration.merge(arg1.changedConfiguration);
-			for (const resource of arg1.resources) {
+			this._changedConfiguration = this._changedConfiguration.merge(arg1._changedConfiguration);
+			for (const resource of this.changedConfigurationByResource.keys()) {
 				let changedConfigurationByResource = this.getOrSetChangedConfigurationForResource(resource);
-				changedConfigurationByResource = changedConfigurationByResource.merge(arg1.changedConfigurationByResource.get(resource));
-				this.changedConfigurationByResource.set(resource, changedConfigurationByResource);
+				changedConfigurationByResource = changedConfigurationByResource.merge(arg1._changedConfigurationByResource.get(resource));
+				this._changedConfigurationByResource.set(resource, changedConfigurationByResource);
 			}
+		} else {
+			this.changeWithKeys(arg1, arg2);
 		}
-		this.changeWithKeys(arg1, arg2);
 		return this;
 	}
 
@@ -526,8 +552,8 @@ export class ConfigurationChangeEvent extends AbstractConfigurationChangeEvent i
 	}
 
 	get affectedKeys(): string[] {
-		const keys = [...this.changedConfiguration.keys];
-		this.changedConfigurationByResource.forEach(model => keys.push(...model.keys));
+		const keys = [...this._changedConfiguration.keys];
+		this._changedConfigurationByResource.forEach(model => keys.push(...model.keys));
 		return keys;
 	}
 
@@ -540,15 +566,15 @@ export class ConfigurationChangeEvent extends AbstractConfigurationChangeEvent i
 	}
 
 	affectsConfiguration(config: string, resource?: URI): boolean {
-		let configurationModelsToSearch: ConfigurationModel[] = [this.changedConfiguration];
+		let configurationModelsToSearch: ConfigurationModel[] = [this._changedConfiguration];
 
 		if (resource) {
-			let model = this.changedConfigurationByResource.get(resource);
+			let model = this._changedConfigurationByResource.get(resource);
 			if (model) {
 				configurationModelsToSearch.push(model);
 			}
 		} else {
-			configurationModelsToSearch.push(...this.changedConfigurationByResource.values());
+			configurationModelsToSearch.push(...this._changedConfigurationByResource.values());
 		}
 
 		for (const configuration of configurationModelsToSearch) {
@@ -561,16 +587,15 @@ export class ConfigurationChangeEvent extends AbstractConfigurationChangeEvent i
 	}
 
 	private changeWithKeys(keys: string[], resource?: URI): void {
-		let changedConfiguration = resource ? this.getOrSetChangedConfigurationForResource(resource) : this.changedConfiguration;
+		let changedConfiguration = resource ? this.getOrSetChangedConfigurationForResource(resource) : this._changedConfiguration;
 		this.updateKeys(changedConfiguration, keys);
 	}
 
 	private getOrSetChangedConfigurationForResource(resource: URI): ConfigurationModel {
-		let changedConfigurationByResource = this.changedConfigurationByResource.get(resource);
+		let changedConfigurationByResource = this._changedConfigurationByResource.get(resource);
 		if (!changedConfigurationByResource) {
 			changedConfigurationByResource = new ConfigurationModel();
-			this.changedConfigurationByResource.set(resource, changedConfigurationByResource);
-			this.resources.push(resource);
+			this._changedConfigurationByResource.set(resource, changedConfigurationByResource);
 		}
 		return changedConfigurationByResource;
 	}

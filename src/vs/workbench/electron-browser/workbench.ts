@@ -46,15 +46,13 @@ import { ContextMenuService } from 'vs/workbench/services/contextview/electron-b
 import { WorkbenchKeybindingService } from 'vs/workbench/services/keybinding/electron-browser/keybindingService';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { WorkspaceService, DefaultConfigurationExportHelper } from 'vs/workbench/services/configuration/node/configurationService';
-import { IConfigurationEditingService } from 'vs/workbench/services/configuration/common/configurationEditing';
-import { ConfigurationEditingService } from 'vs/workbench/services/configuration/node/configurationEditingService';
 import { IJSONEditingService } from 'vs/workbench/services/configuration/common/jsonEditing';
 import { JSONEditingService } from 'vs/workbench/services/configuration/node/jsonEditingService';
 import { ContextKeyService } from 'vs/platform/contextkey/browser/contextKeyService';
 import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
 import { IKeybindingEditingService, KeybindingsEditingService } from 'vs/workbench/services/keybinding/common/keybindingEditing';
 import { ContextKeyExpr, RawContextKey, IContextKeyService, IContextKey } from 'vs/platform/contextkey/common/contextkey';
-import { IActivityBarService } from 'vs/workbench/services/activity/common/activityBarService';
+import { IActivityService } from 'vs/workbench/services/activity/common/activity';
 import { IViewletService } from 'vs/workbench/services/viewlet/browser/viewlet';
 import { ViewletService } from 'vs/workbench/services/viewlet/browser/viewletService';
 import { RemoteFileService } from 'vs/workbench/services/files/electron-browser/remoteFileService';
@@ -98,6 +96,7 @@ import { IWorkspaceEditingService } from 'vs/workbench/services/workspace/common
 import { WorkspaceEditingService } from 'vs/workbench/services/workspace/node/workspaceEditingService';
 import { FileDecorationsService } from 'vs/workbench/services/decorations/browser/decorationsService';
 import { IDecorationsService } from 'vs/workbench/services/decorations/browser/decorations';
+import { ActivityService } from 'vs/workbench/services/activity/browser/activityService';
 import URI from 'vs/base/common/uri';
 
 export const MessagesVisibleContext = new RawContextKey<boolean>('globalMessageVisible', false);
@@ -177,7 +176,6 @@ export class Workbench implements IPartService {
 	private contextKeyService: IContextKeyService;
 	private keybindingService: IKeybindingService;
 	private backupFileService: IBackupFileService;
-	private configurationEditingService: IConfigurationEditingService;
 	private fileService: IFileService;
 	private titlebarPart: TitlebarPart;
 	private activitybarPart: ActivitybarPart;
@@ -553,7 +551,8 @@ export class Workbench implements IPartService {
 		this.activitybarPart = this.instantiationService.createInstance(ActivitybarPart, Identifiers.ACTIVITYBAR_PART);
 		this.toDispose.push(this.activitybarPart);
 		this.toShutdown.push(this.activitybarPart);
-		serviceCollection.set(IActivityBarService, this.activitybarPart);
+		const activityService = this.instantiationService.createInstance(ActivityService, this.activitybarPart, this.panelPart);
+		serviceCollection.set(IActivityService, activityService);
 
 		// File Service
 		this.fileService = this.instantiationService.createInstance(RemoteFileService);
@@ -596,10 +595,6 @@ export class Workbench implements IPartService {
 		// JSON Editing
 		const jsonEditingService = this.instantiationService.createInstance(JSONEditingService);
 		serviceCollection.set(IJSONEditingService, jsonEditingService);
-
-		// Configuration Editing
-		this.configurationEditingService = this.instantiationService.createInstance(ConfigurationEditingService);
-		serviceCollection.set(IConfigurationEditingService, this.configurationEditingService);
 
 		// Workspace Editing
 		serviceCollection.set(IWorkspaceEditingService, new SyncDescriptor(WorkspaceEditingService));
@@ -993,7 +988,7 @@ export class Workbench implements IPartService {
 		this.toDispose.push(this.quickOpen.onHide(() => (<WorkbenchMessageService>this.messageService).resume()));  // resume messages once quick open is closed again
 
 		// Configuration changes
-		this.toDispose.push(this.configurationService.onDidUpdateConfiguration(() => this.onDidUpdateConfiguration()));
+		this.toDispose.push(this.configurationService.onDidChangeConfiguration(() => this.onDidUpdateConfiguration()));
 
 		// Fullscreen changes
 		this.toDispose.push(browser.onDidChangeFullscreen(() => this.onFullscreenChanged()));

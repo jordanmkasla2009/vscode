@@ -12,6 +12,7 @@ import { Registry } from 'vs/platform/registry/common/platform';
 import { IWorkspaceFolder } from 'vs/platform/workspace/common/workspace';
 import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
 import { IConfigurationRegistry, Extensions } from 'vs/platform/configuration/common/configurationRegistry';
+import { StrictResourceMap } from 'vs/base/common/map';
 
 export const IConfigurationService = createDecorator<IConfigurationService>('configurationService');
 
@@ -28,27 +29,31 @@ export interface IConfigurationOverrides {
 }
 
 export enum ConfigurationTarget {
-	DEFAULT = 1,
-	USER,
+	USER = 1,
 	WORKSPACE,
 	WORKSPACE_FOLDER,
+	DEFAULT,
 	MEMORY
 }
 
 export interface IConfigurationChangeEvent {
-	affectedKeys: string[];
 
+	source: ConfigurationTarget;
+	affectedKeys: string[];
 	affectsConfiguration(configuration: string, resource?: URI): boolean;
 
 	// Following data is used for telemetry
-	source: ConfigurationTarget;
 	sourceConfig: any;
+
+	// Following data is used for Extension host configuration event
+	changedConfiguration: IConfigurationModel;
+	changedConfigurationByResource: StrictResourceMap<IConfigurationModel>;
 }
 
 export interface IConfigurationService {
 	_serviceBrand: any;
 
-	onDidUpdateConfiguration: Event<IConfigurationChangeEvent>;
+	onDidChangeConfiguration: Event<IConfigurationChangeEvent>;
 
 	getConfigurationData(): IConfigurationData;
 
@@ -62,7 +67,7 @@ export interface IConfigurationService {
 	updateValue(key: string, value: any): TPromise<void>;
 	updateValue(key: string, value: any, overrides: IConfigurationOverrides): TPromise<void>;
 	updateValue(key: string, value: any, target: ConfigurationTarget): TPromise<void>;
-	updateValue(key: string, value: any, overrides: IConfigurationOverrides, target: ConfigurationTarget): TPromise<void>;
+	updateValue(key: string, value: any, overrides: IConfigurationOverrides, target: ConfigurationTarget, donotNotifyError?: boolean): TPromise<void>;
 
 	reloadConfiguration(): TPromise<void>;
 	reloadConfiguration(folder: IWorkspaceFolder): TPromise<void>;
@@ -85,7 +90,7 @@ export interface IConfigurationService {
 	};
 }
 
-export interface IConfiguraionModel {
+export interface IConfigurationModel {
 	contents: any;
 	keys: string[];
 	overrides: IOverrides[];
@@ -97,13 +102,13 @@ export interface IOverrides {
 }
 
 export interface IConfigurationData {
-	defaults: IConfiguraionModel;
-	user: IConfiguraionModel;
-	workspace: IConfiguraionModel;
-	folders: { [folder: string]: IConfiguraionModel };
+	defaults: IConfigurationModel;
+	user: IConfigurationModel;
+	workspace: IConfigurationModel;
+	folders: { [folder: string]: IConfigurationModel };
 }
 
-export function compare(from: IConfiguraionModel, to: IConfiguraionModel): { added: string[], removed: string[], updated: string[] } {
+export function compare(from: IConfigurationModel, to: IConfigurationModel): { added: string[], removed: string[], updated: string[] } {
 	const added = to.keys.filter(key => from.keys.indexOf(key) === -1);
 	const removed = from.keys.filter(key => to.keys.indexOf(key) === -1);
 	const updated = [];
