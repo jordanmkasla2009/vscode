@@ -3,23 +3,20 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import 'vs/css!./iPadShowKeyboard';
-import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import * as browser from 'vs/base/browser/browser';
 import * as dom from 'vs/base/browser/dom';
-import { IEditorContribution } from 'vs/editor/common/editorCommon';
+import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { ICodeEditor, IOverlayWidget, IOverlayWidgetPosition, OverlayWidgetPositionPreference } from 'vs/editor/browser/editorBrowser';
-import { editorContribution } from 'vs/editor/browser/editorBrowserExtensions';
+import { registerEditorContribution } from 'vs/editor/browser/editorExtensions';
+import { IEditorContribution } from 'vs/editor/common/editorCommon';
 
-@editorContribution
 export class IPadShowKeyboard implements IEditorContribution {
 
-	private static ID = 'editor.contrib.iPadShowKeyboard';
+	private static readonly ID = 'editor.contrib.iPadShowKeyboard';
 
-	private editor: ICodeEditor;
-	private widget: ShowKeyboardWidget;
+	private readonly editor: ICodeEditor;
+	private widget: ShowKeyboardWidget | null;
 	private toDispose: IDisposable[];
 
 	constructor(editor: ICodeEditor) {
@@ -32,14 +29,13 @@ export class IPadShowKeyboard implements IEditorContribution {
 	}
 
 	private update(): void {
-		const hasWidget = (!!this.widget);
 		const shouldHaveWidget = (!this.editor.getConfiguration().readOnly);
 
-		if (!hasWidget && shouldHaveWidget) {
+		if (!this.widget && shouldHaveWidget) {
 
 			this.widget = new ShowKeyboardWidget(this.editor);
 
-		} else if (hasWidget && !shouldHaveWidget) {
+		} else if (this.widget && !shouldHaveWidget) {
 
 			this.widget.dispose();
 			this.widget = null;
@@ -62,11 +58,11 @@ export class IPadShowKeyboard implements IEditorContribution {
 
 class ShowKeyboardWidget implements IOverlayWidget {
 
-	private static ID = 'editor.contrib.ShowKeyboardWidget';
+	private static readonly ID = 'editor.contrib.ShowKeyboardWidget';
 
-	private editor: ICodeEditor;
+	private readonly editor: ICodeEditor;
 
-	private _domNode: HTMLElement;
+	private readonly _domNode: HTMLElement;
 	private _toDispose: IDisposable[];
 
 	constructor(editor: ICodeEditor) {
@@ -106,3 +102,5 @@ class ShowKeyboardWidget implements IOverlayWidget {
 		};
 	}
 }
+
+registerEditorContribution(IPadShowKeyboard);

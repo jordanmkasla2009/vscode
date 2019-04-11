@@ -65,7 +65,12 @@
 		},
 		{
 			"name": "Control flow keywords",
-			"scope": "keyword.control",
+			"scope": [
+				"keyword.control",
+				"keyword.operator.new.cpp",
+				"keyword.operator.delete.cpp",
+				"keyword.other.using"
+			],
 			"settings": {
 				"foreground": "#C586C0"
 			}
@@ -84,8 +89,7 @@
 		{
 			"name": "Object keys, TS grammar specific",
 			"scope": [
-				"meta.object-literal.key",
-				"meta.object-literal.key entity.name.function"
+				"meta.object-literal.key"
 			],
 			"settings": {
 				"foreground": "#9CDCFE"

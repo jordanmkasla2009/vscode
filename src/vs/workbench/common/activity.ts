@@ -10,7 +10,8 @@ import { IConstructorSignature0 } from 'vs/platform/instantiation/common/instant
 export interface IActivity {
 	id: string;
 	name: string;
-	cssClass: string;
+	keybindingId?: string;
+	cssClass?: string;
 }
 
 export interface IGlobalActivity extends IActivity {
@@ -26,7 +27,7 @@ export interface IGlobalActivityRegistry {
 
 export class GlobalActivityRegistry implements IGlobalActivityRegistry {
 
-	private activityDescriptors = new Set<IConstructorSignature0<IGlobalActivity>>();
+	private readonly activityDescriptors = new Set<IConstructorSignature0<IGlobalActivity>>();
 
 	registerActivity(descriptor: IConstructorSignature0<IGlobalActivity>): void {
 		this.activityDescriptors.add(descriptor);
@@ -35,6 +36,7 @@ export class GlobalActivityRegistry implements IGlobalActivityRegistry {
 	getActivities(): IConstructorSignature0<IGlobalActivity>[] {
 		const result: IConstructorSignature0<IGlobalActivity>[] = [];
 		this.activityDescriptors.forEach(d => result.push(d));
+
 		return result;
 	}
 }

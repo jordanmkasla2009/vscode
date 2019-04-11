@@ -3,34 +3,40 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
-import path = require('path');
-import assert = require('assert');
-
-import { join, normalize } from 'vs/base/common/paths';
+import * as assert from 'assert';
+import * as path from 'vs/base/common/path';
+import { getPathFromAmdModule } from 'vs/base/common/amd';
 import * as platform from 'vs/base/common/platform';
+import { joinPath } from 'vs/base/common/resources';
+import { URI } from 'vs/base/common/uri';
+import { IFolderQuery, QueryType, IRawFileMatch } from 'vs/workbench/services/search/common/search';
+import { Engine as FileSearchEngine, FileWalker } from 'vs/workbench/services/search/node/fileSearch';
 
-import { FileWalker, Engine as FileSearchEngine } from 'vs/workbench/services/search/node/fileSearch';
-import { IRawFileMatch, IFolderSearch } from 'vs/workbench/services/search/node/search';
-
-const TEST_FIXTURES = path.normalize(require.toUrl('./fixtures'));
-const EXAMPLES_FIXTURES = path.join(TEST_FIXTURES, 'examples');
-const MORE_FIXTURES = path.join(TEST_FIXTURES, 'more');
-const TEST_ROOT_FOLDER: IFolderSearch = { folder: TEST_FIXTURES };
-const ROOT_FOLDER_QUERY: IFolderSearch[] = [
+const TEST_FIXTURES = path.normalize(getPathFromAmdModule(require, './fixtures'));
+const EXAMPLES_FIXTURES = URI.file(path.join(TEST_FIXTURES, 'examples'));
+const MORE_FIXTURES = URI.file(path.join(TEST_FIXTURES, 'more'));
+const TEST_ROOT_FOLDER: IFolderQuery = { folder: URI.file(TEST_FIXTURES) };
+const ROOT_FOLDER_QUERY: IFolderQuery[] = [
 	TEST_ROOT_FOLDER
 ];
 
-const MULTIROOT_QUERIES: IFolderSearch[] = [
+const ROOT_FOLDER_QUERY_36438: IFolderQuery[] = [
+	{ folder: URI.file(path.normalize(getPathFromAmdModule(require, './fixtures2/36438'))) }
+];
+
+const MULTIROOT_QUERIES: IFolderQuery[] = [
 	{ folder: EXAMPLES_FIXTURES },
 	{ folder: MORE_FIXTURES }
 ];
 
+const testTimeout = 5000;
+
 suite('FileSearchEngine', () => {
 
 	test('Files: *.js', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			filePattern: '*.js'
 		});
@@ -48,7 +54,9 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: maxResults', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			maxResults: 1
 		});
@@ -66,10 +74,11 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: maxResults without Ripgrep', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			maxResults: 1,
-			useRipgrep: false
 		});
 
 		let count = 0;
@@ -85,7 +94,9 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: exists', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			includePattern: { '**/file.txt': true },
 			exists: true
@@ -105,7 +116,9 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: not exists', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			includePattern: { '**/nofile.txt': true },
 			exists: true
@@ -125,11 +138,12 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: exists without Ripgrep', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			includePattern: { '**/file.txt': true },
 			exists: true,
-			useRipgrep: false
 		});
 
 		let count = 0;
@@ -146,11 +160,12 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: not exists without Ripgrep', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			includePattern: { '**/nofile.txt': true },
 			exists: true,
-			useRipgrep: false
 		});
 
 		let count = 0;
@@ -167,9 +182,11 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: examples/com*', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
-			filePattern: normalize(join('examples', 'com*'), true)
+			filePattern: path.join('examples', 'com*')
 		});
 
 		let count = 0;
@@ -185,7 +202,9 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: examples (fuzzy)', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			filePattern: 'xl'
 		});
@@ -203,7 +222,9 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: multiroot', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: MULTIROOT_QUERIES,
 			filePattern: 'file'
 		});
@@ -221,14 +242,15 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: multiroot with includePattern and maxResults', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: MULTIROOT_QUERIES,
 			maxResults: 1,
 			includePattern: {
 				'*.txt': true,
 				'*.js': true
 			},
-			useRipgrep: true
 		});
 
 		let count = 0;
@@ -244,14 +266,15 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: multiroot with includePattern and exists', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: MULTIROOT_QUERIES,
 			exists: true,
 			includePattern: {
 				'*.txt': true,
 				'*.js': true
 			},
-			useRipgrep: true
 		});
 
 		let count = 0;
@@ -268,7 +291,9 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: NPE (CamelCase)', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			filePattern: 'NullPE'
 		});
@@ -286,7 +311,9 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: *.*', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			filePattern: '*.*'
 		});
@@ -304,7 +331,9 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: *.as', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			filePattern: '*.as'
 		});
@@ -322,7 +351,9 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: *.* without derived', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			filePattern: 'site.*',
 			excludePattern: { '**/*.css': { 'when': '$(basename).less' } }
@@ -344,7 +375,9 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: *.* exclude folder without wildcard', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			filePattern: '*.*',
 			excludePattern: { 'examples': true }
@@ -362,8 +395,50 @@ suite('FileSearchEngine', () => {
 		});
 	});
 
+	test('Files: exclude folder without wildcard #36438', function (done: () => void) {
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
+			folderQueries: ROOT_FOLDER_QUERY_36438,
+			excludePattern: { 'modules': true }
+		});
+
+		let count = 0;
+		engine.search((result) => {
+			if (result) {
+				count++;
+			}
+		}, () => { }, (error) => {
+			assert.ok(!error);
+			assert.equal(count, 1);
+			done();
+		});
+	});
+
+	test('Files: include folder without wildcard #36438', function (done: () => void) {
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
+			folderQueries: ROOT_FOLDER_QUERY_36438,
+			includePattern: { 'modules/**': true }
+		});
+
+		let count = 0;
+		engine.search((result) => {
+			if (result) {
+				count++;
+			}
+		}, () => { }, (error) => {
+			assert.ok(!error);
+			assert.equal(count, 1);
+			done();
+		});
+	});
+
 	test('Files: *.* exclude folder with leading wildcard', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			filePattern: '*.*',
 			excludePattern: { '**/examples': true }
@@ -382,7 +457,9 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: *.* exclude folder with trailing wildcard', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			filePattern: '*.*',
 			excludePattern: { 'examples/**': true }
@@ -401,7 +478,9 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: *.* exclude with unicode', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			filePattern: '*.*',
 			excludePattern: { '**/üm laut汉语': true }
@@ -419,8 +498,30 @@ suite('FileSearchEngine', () => {
 		});
 	});
 
+	test('Files: *.* include with unicode', function (done: () => void) {
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
+			folderQueries: ROOT_FOLDER_QUERY,
+			filePattern: '*.*',
+			includePattern: { '**/üm laut汉语/*': true }
+		});
+
+		let count = 0;
+		engine.search((result) => {
+			if (result) {
+				count++;
+			}
+		}, () => { }, (error) => {
+			assert.ok(!error);
+			assert.equal(count, 1);
+			done();
+		});
+	});
+
 	test('Files: multiroot with exclude', function (done: () => void) {
-		const folderQueries: IFolderSearch[] = [
+		this.timeout(testTimeout);
+		const folderQueries: IFolderQuery[] = [
 			{
 				folder: EXAMPLES_FIXTURES,
 				excludePattern: {
@@ -436,6 +537,7 @@ suite('FileSearchEngine', () => {
 		];
 
 		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries,
 			filePattern: '*'
 		});
@@ -453,7 +555,9 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: Unicode and Spaces', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			filePattern: '汉语'
 		});
@@ -474,7 +578,9 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: no results', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			filePattern: 'nofilematch'
 		});
@@ -491,30 +597,10 @@ suite('FileSearchEngine', () => {
 		});
 	});
 
-	test('Files: absolute path to file ignores excludes', function (done: () => void) {
-		let engine = new FileSearchEngine({
-			folderQueries: ROOT_FOLDER_QUERY,
-			filePattern: path.normalize(path.join(require.toUrl('./fixtures'), 'site.css')),
-			excludePattern: { '**/*.css': true }
-		});
-
-		let count = 0;
-		let res: IRawFileMatch;
-		engine.search((result) => {
-			if (result) {
-				count++;
-			}
-			res = result;
-		}, () => { }, (error) => {
-			assert.ok(!error);
-			assert.equal(count, 1);
-			assert.equal(path.basename(res.relativePath), 'site.css');
-			done();
-		});
-	});
-
 	test('Files: relative path matched once', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			filePattern: path.normalize(path.join('examples', 'company.js'))
 		});
@@ -534,30 +620,10 @@ suite('FileSearchEngine', () => {
 		});
 	});
 
-	test('Files: relative path to file ignores excludes', function (done: () => void) {
-		let engine = new FileSearchEngine({
-			folderQueries: ROOT_FOLDER_QUERY,
-			filePattern: path.normalize(path.join('examples', 'company.js')),
-			excludePattern: { '**/*.js': true }
-		});
-
-		let count = 0;
-		let res: IRawFileMatch;
-		engine.search((result) => {
-			if (result) {
-				count++;
-			}
-			res = result;
-		}, () => { }, (error) => {
-			assert.ok(!error);
-			assert.equal(count, 1);
-			assert.equal(path.basename(res.relativePath), 'company.js');
-			done();
-		});
-	});
-
 	test('Files: Include pattern, single files', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			includePattern: {
 				'site.css': true,
@@ -566,7 +632,7 @@ suite('FileSearchEngine', () => {
 			}
 		});
 
-		let res: IRawFileMatch[] = [];
+		const res: IRawFileMatch[] = [];
 		engine.search((result) => {
 			res.push(result);
 		}, () => { }, (error) => {
@@ -580,12 +646,14 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: extraFiles only', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: [],
-			extraFiles: [
-				path.normalize(path.join(require.toUrl('./fixtures'), 'site.css')),
-				path.normalize(path.join(require.toUrl('./fixtures'), 'examples', 'company.js')),
-				path.normalize(path.join(require.toUrl('./fixtures'), 'index.html'))
+			extraFileResources: [
+				URI.file(path.normalize(path.join(getPathFromAmdModule(require, './fixtures'), 'site.css'))),
+				URI.file(path.normalize(path.join(getPathFromAmdModule(require, './fixtures'), 'examples', 'company.js'))),
+				URI.file(path.normalize(path.join(getPathFromAmdModule(require, './fixtures'), 'index.html')))
 			],
 			filePattern: '*.js'
 		});
@@ -606,12 +674,14 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: extraFiles only (with include)', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: [],
-			extraFiles: [
-				path.normalize(path.join(require.toUrl('./fixtures'), 'site.css')),
-				path.normalize(path.join(require.toUrl('./fixtures'), 'examples', 'company.js')),
-				path.normalize(path.join(require.toUrl('./fixtures'), 'index.html'))
+			extraFileResources: [
+				URI.file(path.normalize(path.join(getPathFromAmdModule(require, './fixtures'), 'site.css'))),
+				URI.file(path.normalize(path.join(getPathFromAmdModule(require, './fixtures'), 'examples', 'company.js'))),
+				URI.file(path.normalize(path.join(getPathFromAmdModule(require, './fixtures'), 'index.html')))
 			],
 			filePattern: '*.*',
 			includePattern: { '**/*.css': true }
@@ -633,12 +703,14 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: extraFiles only (with exclude)', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: [],
-			extraFiles: [
-				path.normalize(path.join(require.toUrl('./fixtures'), 'site.css')),
-				path.normalize(path.join(require.toUrl('./fixtures'), 'examples', 'company.js')),
-				path.normalize(path.join(require.toUrl('./fixtures'), 'index.html'))
+			extraFileResources: [
+				URI.file(path.normalize(path.join(getPathFromAmdModule(require, './fixtures'), 'site.css'))),
+				URI.file(path.normalize(path.join(getPathFromAmdModule(require, './fixtures'), 'examples', 'company.js'))),
+				URI.file(path.normalize(path.join(getPathFromAmdModule(require, './fixtures'), 'index.html')))
 			],
 			filePattern: '*.*',
 			excludePattern: { '**/*.css': true }
@@ -657,10 +729,12 @@ suite('FileSearchEngine', () => {
 	});
 
 	test('Files: no dupes in nested folders', function (done: () => void) {
-		let engine = new FileSearchEngine({
+		this.timeout(testTimeout);
+		const engine = new FileSearchEngine({
+			type: QueryType.File,
 			folderQueries: [
 				{ folder: EXAMPLES_FIXTURES },
-				{ folder: path.join(EXAMPLES_FIXTURES, 'subfolder') }
+				{ folder: joinPath(EXAMPLES_FIXTURES, 'subfolder') }
 			],
 			filePattern: 'subfile.txt'
 		});
@@ -681,6 +755,7 @@ suite('FileSearchEngine', () => {
 suite('FileWalker', () => {
 
 	test('Find: exclude subfolder', function (done: () => void) {
+		this.timeout(testTimeout);
 		if (platform.isWindows) {
 			done();
 			return;
@@ -689,33 +764,42 @@ suite('FileWalker', () => {
 		const file0 = './more/file.txt';
 		const file1 = './examples/subfolder/subfile.txt';
 
-		const walker = new FileWalker({ folderQueries: ROOT_FOLDER_QUERY, excludePattern: { '**/something': true } });
+		const walker = new FileWalker({
+			type: QueryType.File,
+			folderQueries: ROOT_FOLDER_QUERY,
+			excludePattern: { '**/something': true }
+		});
 		const cmd1 = walker.spawnFindCmd(TEST_ROOT_FOLDER);
-		walker.readStdout(cmd1, 'utf8', /*isRipgrep=*/false, (err1, stdout1) => {
+		walker.readStdout(cmd1, 'utf8', (err1, stdout1) => {
 			assert.equal(err1, null);
-			assert.notStrictEqual(stdout1.split('\n').indexOf(file0), -1, stdout1);
-			assert.notStrictEqual(stdout1.split('\n').indexOf(file1), -1, stdout1);
+			assert.notStrictEqual(stdout1!.split('\n').indexOf(file0), -1, stdout1);
+			assert.notStrictEqual(stdout1!.split('\n').indexOf(file1), -1, stdout1);
 
-			const walker = new FileWalker({ folderQueries: ROOT_FOLDER_QUERY, excludePattern: { '**/subfolder': true } });
+			const walker = new FileWalker({
+				type: QueryType.File,
+				folderQueries: ROOT_FOLDER_QUERY,
+				excludePattern: { '**/subfolder': true }
+			});
 			const cmd2 = walker.spawnFindCmd(TEST_ROOT_FOLDER);
-			walker.readStdout(cmd2, 'utf8', /*isRipgrep=*/false, (err2, stdout2) => {
+			walker.readStdout(cmd2, 'utf8', (err2, stdout2) => {
 				assert.equal(err2, null);
-				assert.notStrictEqual(stdout1.split('\n').indexOf(file0), -1, stdout1);
-				assert.strictEqual(stdout2.split('\n').indexOf(file1), -1, stdout2);
+				assert.notStrictEqual(stdout1!.split('\n').indexOf(file0), -1, stdout1);
+				assert.strictEqual(stdout2!.split('\n').indexOf(file1), -1, stdout2);
 				done();
 			});
 		});
 	});
 
 	test('Find: folder excludes', function (done: () => void) {
+		this.timeout(testTimeout);
 		if (platform.isWindows) {
 			done();
 			return;
 		}
 
-		const folderQueries: IFolderSearch[] = [
+		const folderQueries: IFolderQuery[] = [
 			{
-				folder: TEST_FIXTURES,
+				folder: URI.file(TEST_FIXTURES),
 				excludePattern: { '**/subfolder': true }
 			}
 		];
@@ -723,17 +807,18 @@ suite('FileWalker', () => {
 		const file0 = './more/file.txt';
 		const file1 = './examples/subfolder/subfile.txt';
 
-		const walker = new FileWalker({ folderQueries });
+		const walker = new FileWalker({ type: QueryType.File, folderQueries });
 		const cmd1 = walker.spawnFindCmd(folderQueries[0]);
-		walker.readStdout(cmd1, 'utf8', /*isRipgrep=*/false, (err1, stdout1) => {
+		walker.readStdout(cmd1, 'utf8', (err1, stdout1) => {
 			assert.equal(err1, null);
-			assert(outputContains(stdout1, file0), stdout1);
-			assert(!outputContains(stdout1, file1), stdout1);
+			assert(outputContains(stdout1!, file0), stdout1);
+			assert(!outputContains(stdout1!, file1), stdout1);
 			done();
 		});
 	});
 
 	test('Find: exclude multiple folders', function (done: () => void) {
+		this.timeout(testTimeout);
 		if (platform.isWindows) {
 			done();
 			return;
@@ -743,27 +828,28 @@ suite('FileWalker', () => {
 		const file1 = './examples/small.js';
 		const file2 = './more/file.txt';
 
-		const walker = new FileWalker({ folderQueries: ROOT_FOLDER_QUERY, excludePattern: { '**/something': true } });
+		const walker = new FileWalker({ type: QueryType.File, folderQueries: ROOT_FOLDER_QUERY, excludePattern: { '**/something': true } });
 		const cmd1 = walker.spawnFindCmd(TEST_ROOT_FOLDER);
-		walker.readStdout(cmd1, 'utf8', /*isRipgrep=*/false, (err1, stdout1) => {
+		walker.readStdout(cmd1, 'utf8', (err1, stdout1) => {
 			assert.equal(err1, null);
-			assert.notStrictEqual(stdout1.split('\n').indexOf(file0), -1, stdout1);
-			assert.notStrictEqual(stdout1.split('\n').indexOf(file1), -1, stdout1);
-			assert.notStrictEqual(stdout1.split('\n').indexOf(file2), -1, stdout1);
+			assert.notStrictEqual(stdout1!.split('\n').indexOf(file0), -1, stdout1);
+			assert.notStrictEqual(stdout1!.split('\n').indexOf(file1), -1, stdout1);
+			assert.notStrictEqual(stdout1!.split('\n').indexOf(file2), -1, stdout1);
 
-			const walker = new FileWalker({ folderQueries: ROOT_FOLDER_QUERY, excludePattern: { '{**/examples,**/more}': true } });
+			const walker = new FileWalker({ type: QueryType.File, folderQueries: ROOT_FOLDER_QUERY, excludePattern: { '{**/examples,**/more}': true } });
 			const cmd2 = walker.spawnFindCmd(TEST_ROOT_FOLDER);
-			walker.readStdout(cmd2, 'utf8', /*isRipgrep=*/false, (err2, stdout2) => {
+			walker.readStdout(cmd2, 'utf8', (err2, stdout2) => {
 				assert.equal(err2, null);
-				assert.notStrictEqual(stdout1.split('\n').indexOf(file0), -1, stdout1);
-				assert.strictEqual(stdout2.split('\n').indexOf(file1), -1, stdout2);
-				assert.strictEqual(stdout2.split('\n').indexOf(file2), -1, stdout2);
+				assert.notStrictEqual(stdout1!.split('\n').indexOf(file0), -1, stdout1);
+				assert.strictEqual(stdout2!.split('\n').indexOf(file1), -1, stdout2);
+				assert.strictEqual(stdout2!.split('\n').indexOf(file2), -1, stdout2);
 				done();
 			});
 		});
 	});
 
 	test('Find: exclude folder path suffix', function (done: () => void) {
+		this.timeout(testTimeout);
 		if (platform.isWindows) {
 			done();
 			return;
@@ -772,25 +858,26 @@ suite('FileWalker', () => {
 		const file0 = './examples/company.js';
 		const file1 = './examples/subfolder/subfile.txt';
 
-		const walker = new FileWalker({ folderQueries: ROOT_FOLDER_QUERY, excludePattern: { '**/examples/something': true } });
+		const walker = new FileWalker({ type: QueryType.File, folderQueries: ROOT_FOLDER_QUERY, excludePattern: { '**/examples/something': true } });
 		const cmd1 = walker.spawnFindCmd(TEST_ROOT_FOLDER);
-		walker.readStdout(cmd1, 'utf8', /*isRipgrep=*/false, (err1, stdout1) => {
+		walker.readStdout(cmd1, 'utf8', (err1, stdout1) => {
 			assert.equal(err1, null);
-			assert.notStrictEqual(stdout1.split('\n').indexOf(file0), -1, stdout1);
-			assert.notStrictEqual(stdout1.split('\n').indexOf(file1), -1, stdout1);
+			assert.notStrictEqual(stdout1!.split('\n').indexOf(file0), -1, stdout1);
+			assert.notStrictEqual(stdout1!.split('\n').indexOf(file1), -1, stdout1);
 
-			const walker = new FileWalker({ folderQueries: ROOT_FOLDER_QUERY, excludePattern: { '**/examples/subfolder': true } });
+			const walker = new FileWalker({ type: QueryType.File, folderQueries: ROOT_FOLDER_QUERY, excludePattern: { '**/examples/subfolder': true } });
 			const cmd2 = walker.spawnFindCmd(TEST_ROOT_FOLDER);
-			walker.readStdout(cmd2, 'utf8', /*isRipgrep=*/false, (err2, stdout2) => {
+			walker.readStdout(cmd2, 'utf8', (err2, stdout2) => {
 				assert.equal(err2, null);
-				assert.notStrictEqual(stdout1.split('\n').indexOf(file0), -1, stdout1);
-				assert.strictEqual(stdout2.split('\n').indexOf(file1), -1, stdout2);
+				assert.notStrictEqual(stdout1!.split('\n').indexOf(file0), -1, stdout1);
+				assert.strictEqual(stdout2!.split('\n').indexOf(file1), -1, stdout2);
 				done();
 			});
 		});
 	});
 
 	test('Find: exclude subfolder path suffix', function (done: () => void) {
+		this.timeout(testTimeout);
 		if (platform.isWindows) {
 			done();
 			return;
@@ -799,25 +886,26 @@ suite('FileWalker', () => {
 		const file0 = './examples/subfolder/subfile.txt';
 		const file1 = './examples/subfolder/anotherfolder/anotherfile.txt';
 
-		const walker = new FileWalker({ folderQueries: ROOT_FOLDER_QUERY, excludePattern: { '**/subfolder/something': true } });
+		const walker = new FileWalker({ type: QueryType.File, folderQueries: ROOT_FOLDER_QUERY, excludePattern: { '**/subfolder/something': true } });
 		const cmd1 = walker.spawnFindCmd(TEST_ROOT_FOLDER);
-		walker.readStdout(cmd1, 'utf8', /*isRipgrep=*/false, (err1, stdout1) => {
+		walker.readStdout(cmd1, 'utf8', (err1, stdout1) => {
 			assert.equal(err1, null);
-			assert.notStrictEqual(stdout1.split('\n').indexOf(file0), -1, stdout1);
-			assert.notStrictEqual(stdout1.split('\n').indexOf(file1), -1, stdout1);
+			assert.notStrictEqual(stdout1!.split('\n').indexOf(file0), -1, stdout1);
+			assert.notStrictEqual(stdout1!.split('\n').indexOf(file1), -1, stdout1);
 
-			const walker = new FileWalker({ folderQueries: ROOT_FOLDER_QUERY, excludePattern: { '**/subfolder/anotherfolder': true } });
+			const walker = new FileWalker({ type: QueryType.File, folderQueries: ROOT_FOLDER_QUERY, excludePattern: { '**/subfolder/anotherfolder': true } });
 			const cmd2 = walker.spawnFindCmd(TEST_ROOT_FOLDER);
-			walker.readStdout(cmd2, 'utf8', /*isRipgrep=*/false, (err2, stdout2) => {
+			walker.readStdout(cmd2, 'utf8', (err2, stdout2) => {
 				assert.equal(err2, null);
-				assert.notStrictEqual(stdout1.split('\n').indexOf(file0), -1, stdout1);
-				assert.strictEqual(stdout2.split('\n').indexOf(file1), -1, stdout2);
+				assert.notStrictEqual(stdout1!.split('\n').indexOf(file0), -1, stdout1);
+				assert.strictEqual(stdout2!.split('\n').indexOf(file1), -1, stdout2);
 				done();
 			});
 		});
 	});
 
 	test('Find: exclude folder path', function (done: () => void) {
+		this.timeout(testTimeout);
 		if (platform.isWindows) {
 			done();
 			return;
@@ -826,25 +914,26 @@ suite('FileWalker', () => {
 		const file0 = './examples/company.js';
 		const file1 = './examples/subfolder/subfile.txt';
 
-		const walker = new FileWalker({ folderQueries: ROOT_FOLDER_QUERY, excludePattern: { 'examples/something': true } });
+		const walker = new FileWalker({ type: QueryType.File, folderQueries: ROOT_FOLDER_QUERY, excludePattern: { 'examples/something': true } });
 		const cmd1 = walker.spawnFindCmd(TEST_ROOT_FOLDER);
-		walker.readStdout(cmd1, 'utf8', /*isRipgrep=*/false, (err1, stdout1) => {
+		walker.readStdout(cmd1, 'utf8', (err1, stdout1) => {
 			assert.equal(err1, null);
-			assert.notStrictEqual(stdout1.split('\n').indexOf(file0), -1, stdout1);
-			assert.notStrictEqual(stdout1.split('\n').indexOf(file1), -1, stdout1);
+			assert.notStrictEqual(stdout1!.split('\n').indexOf(file0), -1, stdout1);
+			assert.notStrictEqual(stdout1!.split('\n').indexOf(file1), -1, stdout1);
 
-			const walker = new FileWalker({ folderQueries: ROOT_FOLDER_QUERY, excludePattern: { 'examples/subfolder': true } });
+			const walker = new FileWalker({ type: QueryType.File, folderQueries: ROOT_FOLDER_QUERY, excludePattern: { 'examples/subfolder': true } });
 			const cmd2 = walker.spawnFindCmd(TEST_ROOT_FOLDER);
-			walker.readStdout(cmd2, 'utf8', /*isRipgrep=*/false, (err2, stdout2) => {
+			walker.readStdout(cmd2, 'utf8', (err2, stdout2) => {
 				assert.equal(err2, null);
-				assert.notStrictEqual(stdout1.split('\n').indexOf(file0), -1, stdout1);
-				assert.strictEqual(stdout2.split('\n').indexOf(file1), -1, stdout2);
+				assert.notStrictEqual(stdout1!.split('\n').indexOf(file0), -1, stdout1);
+				assert.strictEqual(stdout2!.split('\n').indexOf(file1), -1, stdout2);
 				done();
 			});
 		});
 	});
 
 	test('Find: exclude combination of paths', function (done: () => void) {
+		this.timeout(testTimeout);
 		if (platform.isWindows) {
 			done();
 			return;
@@ -861,6 +950,7 @@ suite('FileWalker', () => {
 		];
 
 		const walker = new FileWalker({
+			type: QueryType.File,
 			folderQueries: ROOT_FOLDER_QUERY,
 			excludePattern: {
 				'**/subfolder/anotherfolder': true,
@@ -870,13 +960,13 @@ suite('FileWalker', () => {
 			}
 		});
 		const cmd1 = walker.spawnFindCmd(TEST_ROOT_FOLDER);
-		walker.readStdout(cmd1, 'utf8', /*isRipgrep=*/false, (err1, stdout1) => {
+		walker.readStdout(cmd1, 'utf8', (err1, stdout1) => {
 			assert.equal(err1, null);
 			for (const fileIn of filesIn) {
-				assert.notStrictEqual(stdout1.split('\n').indexOf(fileIn), -1, stdout1);
+				assert.notStrictEqual(stdout1!.split('\n').indexOf(fileIn), -1, stdout1);
 			}
 			for (const fileOut of filesOut) {
-				assert.strictEqual(stdout1.split('\n').indexOf(fileOut), -1, stdout1);
+				assert.strictEqual(stdout1!.split('\n').indexOf(fileOut), -1, stdout1);
 			}
 			done();
 		});
