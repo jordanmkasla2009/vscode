@@ -22,6 +22,7 @@ import { IExtensionService } from 'vs/workbench/services/extensions/common/exten
 import { IFileService } from 'vs/platform/files/common/files';
 import { TerminalInstance } from 'vs/workbench/contrib/terminal/browser/terminalInstance';
 import { IBrowserTerminalConfigHelper } from 'vs/workbench/contrib/terminal/browser/terminal';
+import { IRemoteAgentService } from 'vs/workbench/services/remote/common/remoteAgentService';
 
 export abstract class TerminalService extends CommonTerminalService implements ITerminalService {
 	protected _configHelper: IBrowserTerminalConfigHelper;
@@ -38,11 +39,12 @@ export abstract class TerminalService extends CommonTerminalService implements I
 		@IWorkbenchEnvironmentService private _environmentService: IWorkbenchEnvironmentService,
 		@IExtensionService extensionService: IExtensionService,
 		@IFileService fileService: IFileService,
+		@IRemoteAgentService remoteAgentService: IRemoteAgentService
 	) {
-		super(contextKeyService, panelService, lifecycleService, storageService, notificationService, dialogService, extensionService, fileService);
+		super(contextKeyService, panelService, lifecycleService, storageService, notificationService, dialogService, extensionService, fileService, remoteAgentService);
 	}
 
-	protected abstract _getDefaultShell(p: platform.Platform): string;
+	public abstract getDefaultShell(p: platform.Platform): string;
 
 	public createInstance(terminalFocusContextKey: IContextKey<boolean>, configHelper: ITerminalConfigHelper, container: HTMLElement | undefined, shellLaunchConfig: IShellLaunchConfig, doCreateProcess: boolean): ITerminalInstance {
 		const instance = this._instantiationService.createInstance(TerminalInstance, terminalFocusContextKey, configHelper, container, shellLaunchConfig);
@@ -99,7 +101,7 @@ export abstract class TerminalService extends CommonTerminalService implements I
 		}
 
 		// Never suggest if the setting is non-default already (ie. they set the setting manually)
-		if (this.configHelper.config.shell.windows !== this._getDefaultShell(platform.Platform.Windows)) {
+		if (this.configHelper.config.shell.windows !== this.getDefaultShell(platform.Platform.Windows)) {
 			this._storageService.store(NEVER_SUGGEST_SELECT_WINDOWS_SHELL_STORAGE_KEY, true, StorageScope.GLOBAL);
 			return;
 		}

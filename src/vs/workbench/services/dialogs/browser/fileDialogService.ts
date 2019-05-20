@@ -72,8 +72,8 @@ export class FileDialogService implements IFileDialogService {
 			}
 		}
 
-		// ...then fallback to default folder path
-		return this.defaultFolderPath(schemeFilter);
+		// ...then fallback to default file path
+		return this.defaultFilePath(schemeFilter);
 	}
 
 	private toNativeOpenDialogOptions(options: IPickAndOpenOptions): INativeOpenDialogOptions {
@@ -85,8 +85,8 @@ export class FileDialogService implements IFileDialogService {
 	}
 
 	private shouldUseSimplified(schema: string): boolean {
-		const setting = this.configurationService.getValue('workbench.dialogs.useSimplified');
-		return (schema !== Schemas.file) || ((setting === 'true') || (setting === true));
+		const setting = this.configurationService.getValue('files.simpleDialog.enable');
+		return (schema !== Schemas.file) || (setting === true);
 	}
 
 	private ensureFileSchema(schema: string): string[] {

@@ -11,21 +11,22 @@ import { Disposable } from 'vs/base/common/lifecycle';
 import { isMacintosh } from 'vs/base/common/platform';
 import { endsWith } from 'vs/base/common/strings';
 import { URI } from 'vs/base/common/uri';
+import { EDITOR_FONT_DEFAULTS, IEditorOptions } from 'vs/editor/common/config/editorOptions';
+import * as modes from 'vs/editor/common/modes';
+import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
-import { IFileService } from 'vs/platform/files/common/files';
+import { ExtensionIdentifier } from 'vs/platform/extensions/common/extensions';
+import { ITextFileService } from 'vs/workbench/services/textfile/common/textfiles';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
+import { REMOTE_HOST_SCHEME } from 'vs/platform/remote/common/remoteHosts';
+import { ITunnelService, RemoteTunnel } from 'vs/platform/remote/common/tunnel';
+import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import * as colorRegistry from 'vs/platform/theme/common/colorRegistry';
 import { DARK, ITheme, IThemeService, LIGHT } from 'vs/platform/theme/common/themeService';
+import { Webview, WebviewContentOptions, WebviewOptions } from 'vs/workbench/contrib/webview/common/webview';
 import { registerFileProtocol, WebviewProtocol } from 'vs/workbench/contrib/webview/electron-browser/webviewProtocols';
-import { REMOTE_HOST_SCHEME } from 'vs/platform/remote/common/remoteHosts';
-import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
-import { ExtensionIdentifier } from 'vs/platform/extensions/common/extensions';
 import { areWebviewInputOptionsEqual } from '../browser/webviewEditorService';
 import { WebviewFindWidget } from '../browser/webviewFindWidget';
-import { WebviewContentOptions, WebviewPortMapping, WebviewOptions, Webview } from 'vs/workbench/contrib/webview/common/webview';
-import { ITunnelService, RemoteTunnel } from 'vs/platform/remote/common/tunnel';
-import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
-import { IEditorOptions, EDITOR_FONT_DEFAULTS } from 'vs/editor/common/config/editorOptions';
 
 export interface WebviewPortMapping {
 	readonly port: number;
@@ -117,7 +118,7 @@ class WebviewProtocolProvider extends Disposable {
 		private readonly _extensionLocation: URI | undefined,
 		private readonly _getLocalResourceRoots: () => ReadonlyArray<URI>,
 		private readonly _environmentService: IEnvironmentService,
-		private readonly _fileService: IFileService,
+		private readonly _textFileService: ITextFileService,
 	) {
 		super();
 
@@ -136,11 +137,11 @@ class WebviewProtocolProvider extends Disposable {
 
 		const appRootUri = URI.file(this._environmentService.appRoot);
 
-		registerFileProtocol(contents, WebviewProtocol.CoreResource, this._fileService, undefined, () => [
+		registerFileProtocol(contents, WebviewProtocol.CoreResource, this._textFileService, undefined, () => [
 			appRootUri
 		]);
 
-		registerFileProtocol(contents, WebviewProtocol.VsCodeResource, this._fileService, this._extensionLocation, () =>
+		registerFileProtocol(contents, WebviewProtocol.VsCodeResource, this._textFileService, this._extensionLocation, () =>
 			this._getLocalResourceRoots()
 		);
 	}
@@ -153,7 +154,7 @@ class WebviewPortMappingProvider extends Disposable {
 	constructor(
 		session: WebviewSession,
 		extensionLocation: URI | undefined,
-		mappings: () => ReadonlyArray<WebviewPortMapping>,
+		mappings: () => ReadonlyArray<modes.IWebviewPortMapping>,
 		private readonly tunnelService: ITunnelService,
 		extensionId: ExtensionIdentifier | undefined,
 		@ITelemetryService telemetryService: ITelemetryService
@@ -183,23 +184,23 @@ class WebviewPortMappingProvider extends Disposable {
 
 				const port = +localhostMatch[1];
 				for (const mapping of mappings()) {
-					if (mapping.port === port) {
+					if (mapping.webviewPort === port) {
 						if (extensionLocation && extensionLocation.scheme === REMOTE_HOST_SCHEME) {
-							const tunnel = await this.getOrCreateTunnel(mapping.resolvedPort);
+							const tunnel = await this.getOrCreateTunnel(mapping.extensionHostPort);
 							if (tunnel) {
 								return {
 									redirectURL: details.url.replace(
-										new RegExp(`^${uri.scheme}://localhost:${mapping.port}/`),
+										new RegExp(`^${uri.scheme}://localhost:${mapping.webviewPort}/`),
 										`${uri.scheme}://localhost:${tunnel.tunnelLocalPort}/`)
 								};
 							}
 						}
 
-						if (mapping.port !== mapping.resolvedPort) {
+						if (mapping.webviewPort !== mapping.extensionHostPort) {
 							return {
 								redirectURL: details.url.replace(
-									new RegExp(`^${uri.scheme}://localhost:${mapping.port}/`),
-									`${uri.scheme}://localhost:${mapping.resolvedPort}/`)
+									new RegExp(`^${uri.scheme}://localhost:${mapping.webviewPort}/`),
+									`${uri.scheme}://localhost:${mapping.extensionHostPort}/`)
 							};
 						}
 					}
@@ -353,6 +354,11 @@ class WebviewKeyboardHandler extends Disposable {
 	}
 }
 
+interface WebviewContent {
+	readonly html: string;
+	readonly options: WebviewContentOptions;
+	readonly state: string | undefined;
+}
 
 export class WebviewElement extends Disposable implements Webview {
 	private _webview: Electron.WebviewTag;
@@ -360,8 +366,8 @@ export class WebviewElement extends Disposable implements Webview {
 
 	private _webviewFindWidget: WebviewFindWidget;
 	private _findStarted: boolean = false;
-	private _contents: string = '';
-	private _state: string | undefined = undefined;
+	private content: WebviewContent;
+
 	private _focused = false;
 
 	private readonly _onDidFocus = this._register(new Emitter<void>());
@@ -369,19 +375,24 @@ export class WebviewElement extends Disposable implements Webview {
 
 	constructor(
 		private readonly _options: WebviewOptions,
-		private _contentOptions: WebviewContentOptions,
+		contentOptions: WebviewContentOptions,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 		@IEnvironmentService environmentService: IEnvironmentService,
-		@IFileService fileService: IFileService,
+		@ITextFileService textFileService: ITextFileService,
 		@ITunnelService tunnelService: ITunnelService,
 		@ITelemetryService telemetryService: ITelemetryService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 	) {
 		super();
+		this.content = {
+			html: '',
+			options: contentOptions,
+			state: undefined
+		};
+
 		this._webview = document.createElement('webview');
 		this._webview.setAttribute('partition', `webview${Date.now()}`);
-
 		this._webview.setAttribute('webpreferences', 'contextIsolation=yes');
 
 		this._webview.style.flex = '0 1';
@@ -409,21 +420,21 @@ export class WebviewElement extends Disposable implements Webview {
 		this._register(new WebviewProtocolProvider(
 			this._webview,
 			this._options.extension ? this._options.extension.location : undefined,
-			() => (this._contentOptions.localResourceRoots || []),
+			() => (this.content.options.localResourceRoots || []),
 			environmentService,
-			fileService));
+			textFileService));
 
 		this._register(new WebviewPortMappingProvider(
 			session,
 			_options.extension ? _options.extension.location : undefined,
-			() => (this._contentOptions.portMappings || [{ port: 3000, resolvedPort: 4000 }]),
+			() => (this.content.options.portMappings || []),
 			tunnelService,
 			_options.extension ? _options.extension.id : undefined,
 			telemetryService
 		));
 
 		if (!this._options.allowSvgs) {
-			const svgBlocker = this._register(new SvgBlocker(session, this._contentOptions));
+			const svgBlocker = this._register(new SvgBlocker(session, this.content.options));
 			svgBlocker.onDidBlockSvg(() => this.onDidBlockSvg());
 		}
 
@@ -475,8 +486,9 @@ export class WebviewElement extends Disposable implements Webview {
 					return;
 
 				case 'do-update-state':
-					this._state = event.args[0];
-					this._onDidUpdateState.fire(this._state);
+					const state = event.args[0];
+					this.state = state;
+					this._onDidUpdateState.fire(state);
 					return;
 
 				case 'did-focus':
@@ -541,42 +553,53 @@ export class WebviewElement extends Disposable implements Webview {
 		this._send('initial-scroll-position', value);
 	}
 
-	public set state(value: string | undefined) {
-		this._state = value;
+	public set state(state: string | undefined) {
+		this.content = {
+			html: this.content.html,
+			options: this.content.options,
+			state,
+		};
 	}
 
-	public set options(value: WebviewContentOptions) {
-		if (this._contentOptions && areWebviewInputOptionsEqual(value, this._contentOptions)) {
+	public set options(options: WebviewContentOptions) {
+		if (areWebviewInputOptionsEqual(options, this.content.options)) {
 			return;
 		}
 
-		this._contentOptions = value;
-		this._send('content', {
-			contents: this._contents,
-			options: this._contentOptions,
-			state: this._state
-		});
+		this.content = {
+			html: this.content.html,
+			options: options,
+			state: this.content.state,
+		};
+		this.doUpdateContent();
 	}
 
-	public set contents(value: string) {
-		this._contents = value;
-		this._send('content', {
-			contents: value,
-			options: this._contentOptions,
-			state: this._state
-		});
+	public set html(value: string) {
+		this.content = {
+			html: value,
+			options: this.content.options,
+			state: this.content.state,
+		};
+		this.doUpdateContent();
 	}
 
-	public update(value: string, options: WebviewContentOptions, retainContextWhenHidden: boolean) {
-		if (retainContextWhenHidden && value === this._contents && this._contentOptions && areWebviewInputOptionsEqual(options, this._contentOptions)) {
+	public update(html: string, options: WebviewContentOptions, retainContextWhenHidden: boolean) {
+		if (retainContextWhenHidden && html === this.content.html && areWebviewInputOptionsEqual(options, this.content.options)) {
 			return;
 		}
-		this._contents = value;
-		this._contentOptions = options;
+		this.content = {
+			html: html,
+			options: options,
+			state: this.content.state,
+		};
+		this.doUpdateContent();
+	}
+
+	private doUpdateContent() {
 		this._send('content', {
-			contents: this._contents,
-			options: this._contentOptions,
-			state: this._state
+			contents: this.content.html,
+			options: this.content.options,
+			state: this.content.state
 		});
 	}
 
@@ -618,7 +641,6 @@ export class WebviewElement extends Disposable implements Webview {
 			}
 			return colors;
 		}, {} as { [key: string]: string });
-
 
 		const styles = {
 			'vscode-font-family': '-apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif',
@@ -716,7 +738,7 @@ export class WebviewElement extends Disposable implements Webview {
 	}
 
 	public reload() {
-		this.contents = this._contents;
+		this.doUpdateContent();
 	}
 
 	public selectAll() {

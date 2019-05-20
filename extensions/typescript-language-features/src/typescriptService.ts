@@ -54,6 +54,7 @@ export interface TypeScriptRequestTypes {
 	'quickinfo': [Proto.FileLocationRequestArgs, Proto.QuickInfoResponse];
 	'references': [Proto.FileLocationRequestArgs, Proto.ReferencesResponse];
 	'rename': [Proto.RenameRequestArgs, Proto.RenameResponse];
+	'selectionRange': [Proto.SelectionRangeRequestArgs, Proto.SelectionRangeResponse];
 	'signatureHelp': [Proto.SignatureHelpRequestArgs, Proto.SignatureHelpResponse];
 	'typeDefinition': [Proto.FileLocationRequestArgs, Proto.TypeDefinitionResponse];
 }

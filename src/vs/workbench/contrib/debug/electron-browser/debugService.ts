@@ -392,7 +392,7 @@ export class DebugService implements IDebugService {
 							return this.showError(err.message).then(() => false);
 						}
 						if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
-							return this.showError(nls.localize('noFolderWorkspaceDebugError', "The active file can not be debugged. Make sure it is saved on disk and that you have a debug extension installed for that file type."))
+							return this.showError(nls.localize('noFolderWorkspaceDebugError', "The active file can not be debugged. Make sure it is saved and that you have a debug extension installed for that file type."))
 								.then(() => false);
 						}
 
@@ -509,7 +509,7 @@ export class DebugService implements IDebugService {
 
 			// 'Run without debugging' mode VSCode must terminate the extension host. More details: #3905
 			if (isExtensionHostDebugging(session.configuration) && session.state === State.Running && session.configuration.noDebug) {
-				this.extensionHostDebugService.close(session.root.uri);
+				this.extensionHostDebugService.close(session.getId());
 			}
 
 			this.telemetryDebugSessionStop(session, adapterExitEvent);
@@ -556,8 +556,8 @@ export class DebugService implements IDebugService {
 				return runTasks().then(taskResult => taskResult === TaskRunResult.Success ? session.restart() : undefined);
 			}
 
-			if (isExtensionHostDebugging(session.configuration) && session.root) {
-				return runTasks().then(taskResult => taskResult === TaskRunResult.Success ? this.extensionHostDebugService.reload(session.root.uri) : undefined);
+			if (isExtensionHostDebugging(session.configuration)) {
+				return runTasks().then(taskResult => taskResult === TaskRunResult.Success ? this.extensionHostDebugService.reload(session.getId()) : undefined);
 			}
 
 			const shouldFocus = this.viewModel.focusedSession && session.getId() === this.viewModel.focusedSession.getId();
@@ -719,7 +719,7 @@ export class DebugService implements IDebugService {
 
 			// If a task is missing the problem matcher the promise will never complete, so we need to have a workaround #35340
 			let taskStarted = false;
-			const promise = this.taskService.getActiveTasks().then(tasks => {
+			const promise: Promise<ITaskSummary | null> = this.taskService.getActiveTasks().then(tasks => {
 				if (tasks.filter(t => t._id === task._id).length) {
 					// task is already running - nothing to do.
 					return Promise.resolve(null);
@@ -733,7 +733,7 @@ export class DebugService implements IDebugService {
 				if (task.configurationProperties.isBackground) {
 					return new Promise((c, e) => once(e => e.kind === TaskEventKind.Inactive && e.taskId === task._id, this.taskService.onDidStateChange)(() => {
 						taskStarted = true;
-						c(undefined);
+						c(null);
 					}));
 				}
 
